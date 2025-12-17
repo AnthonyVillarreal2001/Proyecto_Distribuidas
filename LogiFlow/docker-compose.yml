@@ -1,0 +1,77 @@
+services:
+  kong:
+    image: kong:3.6
+    restart: always
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: "/kong/kong-declarative.yml"
+      KONG_LOG_LEVEL: "info"
+      KONG_PROXY_ACCESS_LOG: "/dev/stdout"
+      KONG_ADMIN_ACCESS_LOG: "/dev/stdout"
+      KONG_PROXY_ERROR_LOG: "/dev/stderr"
+      KONG_ADMIN_ERROR_LOG: "/dev/stderr"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
+      SECRET_KEY: ${SECRET_KEY}
+    ports:
+      - "8000:8000"    # Proxy
+      - "8443:8443"    # Proxy SSL
+      - "8001:8001"    # Admin API
+      - "8444:8444"    # Admin API SSL
+    volumes:
+      - ./kong-declarative.yml:/kong/kong-declarative.yml:ro
+    depends_on:
+      - auth-service
+      - pedido-service
+      - fleet-service
+      - billing-service
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./auth-service/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+    ports:
+      - "5001:5001"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5001"]
+
+  pedido-service:
+    build:
+      context: .
+      dockerfile: ./pedido-service/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+    ports:
+      - "5002:5002"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5002"]
+
+  fleet-service:
+    build:
+      context: .
+      dockerfile: ./fleet-service/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+    ports:
+      - "5003:5003"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5003"]
+
+  billing-service:
+    build:
+      context: .
+      dockerfile: ./billing-service/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+    ports:
+      - "5004:5004"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5004"]
+
+networks:
+  default:
+    name: logiflow-net

@@ -1,0 +1,286 @@
+{
+  "info": {
+    "_postman_id": "c6b6e1b8-2a7a-4f59-9a3e-8c7b1b1b8b8f",
+    "name": "LogiFlow Phase 1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Colección para probar LogiFlow (servicios directos y a través de Kong)."
+  },
+  "variable": [
+    { "key": "baseUrlGateway", "value": "http://localhost:8000" },
+    { "key": "baseUrlAuth", "value": "http://localhost:5001" },
+    { "key": "baseUrlPedido", "value": "http://localhost:5002" },
+    { "key": "baseUrlFleet", "value": "http://localhost:5003" },
+    { "key": "baseUrlBilling", "value": "http://localhost:5004" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "pedidoId", "value": "" },
+    { "key": "pedidoCodigo", "value": "" },
+    { "key": "repartidorId", "value": "" },
+    { "key": "vehiculoId", "value": "" },
+    { "key": "facturaId", "value": "" },
+    { "key": "numeroFactura", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Init",
+      "item": [
+        {
+          "name": "Register Default User (idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [ {"key": "Content-Type", "value": "application/json"} ],
+            "url": { "raw": "{{baseUrlAuth}}/api/auth/register", "host": ["{{baseUrlAuth}}"], "path": ["api","auth","register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@example.com\",\n  \"username\": \"demo\",\n  \"password\": \"password123\",\n  \"full_name\": \"Demo User\",\n  \"role\": \"CLIENTE\",\n  \"phone\": \"0999999999\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Register success or already exists', function () {",
+                  "  pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});",
+                  "try {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.access_token) pm.environment.set('accessToken', json.access_token);",
+                  "  if (json && json.refresh_token) pm.environment.set('refreshToken', json.refresh_token);",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [ {"key": "Content-Type", "value": "application/json"} ],
+            "url": { "raw": "{{baseUrlAuth}}/api/auth/login", "host": ["{{baseUrlAuth}}"], "path": ["api","auth","login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"demo\",\n  \"password\": \"password123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login success', function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var json = pm.response.json();",
+                  "if (json && json.access_token) pm.environment.set('accessToken', json.access_token);",
+                  "if (json && json.refresh_token) pm.environment.set('refreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Auth (Direct)",
+      "item": [
+        {
+          "name": "Verify Access Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlAuth}}/api/auth/verify?token={{accessToken}}",
+              "host": ["{{baseUrlAuth}}"],
+              "path": ["api","auth","verify"],
+              "query": [{"key": "token", "value": "{{accessToken}}"}]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [ {"key": "Content-Type", "value": "application/json"} ],
+            "url": { "raw": "{{baseUrlAuth}}/api/auth/token/refresh", "host": ["{{baseUrlAuth}}"], "path": ["api","auth","token","refresh"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "var json = pm.response.json();",
+                "if (json && json.access_token) pm.environment.set('accessToken', json.access_token);"
+              ] }
+            }
+          ]
+        },
+        {
+          "name": "Revoke Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [ {"key": "Content-Type", "value": "application/json"} ],
+            "url": { "raw": "{{baseUrlAuth}}/api/auth/token/revoke", "host": ["{{baseUrlAuth}}"], "path": ["api","auth","token","revoke"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}" }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Pedidos (Direct)",
+      "event": [
+        {"listen": "prerequest", "script": {"exec": [
+          "if (pm.environment.get('accessToken')) {",
+          "  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') });",
+          "}"
+        ]}}
+      ],
+      "item": [
+        {
+          "name": "Crear Pedido",
+          "request": {
+            "method": "POST",
+            "header": [ {"key": "Content-Type", "value": "application/json"} ],
+            "url": {"raw": "{{baseUrlPedido}}/api/pedidos", "host": ["{{baseUrlPedido}}"], "path": ["api","pedidos"]},
+            "body": { "mode": "raw", "raw": "{\n  \"cliente_id\": 1,\n  \"origen_direccion\": \"Centro\",\n  \"destino_direccion\": \"Norte\",\n  \"tipo_entrega\": \"URBANA_RAPIDA\",\n  \"descripcion\": \"Caja\",\n  \"peso_kg\": 2.5,\n  \"contacto_nombre\": \"Juan Perez\",\n  \"contacto_telefono\": \"0999999999\"\n}" }
+          },
+          "event": [
+            {"listen": "test", "script": {"exec": [
+              "pm.test('Pedido creado', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "var j = pm.response.json(); pm.environment.set('pedidoId', j.id); pm.environment.set('pedidoCodigo', j.codigo);"
+            ]}}
+          ]
+        },
+        {
+          "name": "Listar Pedidos",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrlPedido}}/api/pedidos?limit=10", "host": ["{{baseUrlPedido}}"], "path": ["api","pedidos"], "query": [{"key":"limit","value":"10"}]}}
+        },
+        {
+          "name": "Obtener Pedido por ID",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrlPedido}}/api/pedidos/{{pedidoId}}", "host": ["{{baseUrlPedido}}"], "path": ["api","pedidos","{{pedidoId}}"]}}
+        },
+        {
+          "name": "Obtener Pedido por Código",
+          "request": {"method": "GET", "url": {"raw": "{{baseUrlPedido}}/api/pedidos/codigo/{{pedidoCodigo}}", "host": ["{{baseUrlPedido}}"], "path": ["api","pedidos","codigo","{{pedidoCodigo}}"]}}
+        },
+        {
+          "name": "Actualizar Pedido (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key":"Content-Type","value":"application/json"}],
+            "url": {"raw": "{{baseUrlPedido}}/api/pedidos/{{pedidoId}}", "host": ["{{baseUrlPedido}}"], "path": ["api","pedidos","{{pedidoId}}"]},
+            "body": {"mode":"raw","raw":"{\n  \"estado\": \"EN_RUTA\",\n  \"notas_entrega\": \"Saliendo a entrega\"\n}"}
+          }
+        },
+        {
+          "name": "Cancelar Pedido",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key":"Content-Type","value":"application/json"}],
+            "url": {"raw": "{{baseUrlPedido}}/api/pedidos/{{pedidoId}}", "host": ["{{baseUrlPedido}}"], "path": ["api","pedidos","{{pedidoId}}"]},
+            "body": {"mode":"raw","raw":"{\n  \"motivo_cancelacion\": \"Prueba\",\n  \"cancelado_por\": 1\n}"}
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Flota (Direct)",
+      "event": [
+        {"listen": "prerequest", "script": {"exec": [
+          "if (pm.environment.get('accessToken')) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') }); }"
+        ]}}
+      ],
+      "item": [
+        {
+          "name": "Crear Repartidor",
+          "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],
+            "url": {"raw": "{{baseUrlFleet}}/api/flota/repartidores", "host":["{{baseUrlFleet}}"], "path":["api","flota","repartidores"]},
+            "body": {"mode":"raw","raw":"{\n  \"user_id\": 1,\n  \"nombre_completo\": \"Repartidor Uno\",\n  \"telefono\": \"0999988888\",\n  \"email\": \"repartidor1@example.com\",\n  \"licencia_conducir\": \"ABC123\",\n  \"zona_id\": \"Z-1\"\n}"}
+          },
+          "event": [{"listen":"test","script":{"exec":[
+            "var j = pm.response.json(); pm.environment.set('repartidorId', j.id);"
+          ]}}]
+        },
+        {"name":"Listar Repartidores","request":{"method":"GET","url":{"raw":"{{baseUrlFleet}}/api/flota/repartidores?limit=10","host":["{{baseUrlFleet}}"],"path":["api","flota","repartidores"],"query":[{"key":"limit","value":"10"}]}}},
+        {"name":"Obtener Repartidor","request":{"method":"GET","url":{"raw":"{{baseUrlFleet}}/api/flota/repartidores/{{repartidorId}}","host":["{{baseUrlFleet}}"],"path":["api","flota","repartidores","{{repartidorId}}"]}}},
+        {"name":"Actualizar Repartidor (PATCH)","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlFleet}}/api/flota/repartidores/{{repartidorId}}","host":["{{baseUrlFleet}}"],"path":["api","flota","repartidores","{{repartidorId}}"]},"body":{"mode":"raw","raw":"{\n  \"estado\": \"EN_RUTA\",\n  \"ubicacion_lat\": -0.18,\n  \"ubicacion_lon\": -78.48\n}"}}},
+
+        {"name":"Crear Vehículo","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlFleet}}/api/flota/vehiculos","host":["{{baseUrlFleet}}"],"path":["api","flota","vehiculos"]},"body":{"mode":"raw","raw":"{\n  \"repartidor_id\": {{repartidorId}},\n  \"tipo\": \"MOTORIZADO\",\n  \"placa\": \"ABC-123\",\n  \"marca\": \"Yamaha\",\n  \"modelo\": \"YZF\",\n  \"año\": 2022,\n  \"capacidad_peso_kg\": 50\n}"}},"event":[{"listen":"test","script":{"exec":["var j=pm.response.json(); pm.environment.set('vehiculoId', j.id);"]}}]},
+        {"name":"Listar Vehículos","request":{"method":"GET","url":{"raw":"{{baseUrlFleet}}/api/flota/vehiculos?limit=10","host":["{{baseUrlFleet}}"],"path":["api","flota","vehiculos"],"query":[{"key":"limit","value":"10"}]}}},
+        {"name":"Obtener Vehículo","request":{"method":"GET","url":{"raw":"{{baseUrlFleet}}/api/flota/vehiculos/{{vehiculoId}}","host":["{{baseUrlFleet}}"],"path":["api","flota","vehiculos","{{vehiculoId}}"]}}},
+        {"name":"Actualizar Vehículo (PATCH)","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlFleet}}/api/flota/vehiculos/{{vehiculoId}}","host":["{{baseUrlFleet}}"],"path":["api","flota","vehiculos","{{vehiculoId}}"]},"body":{"mode":"raw","raw":"{\n  \"estado\": \"MANTENIMIENTO\"\n}"}}},
+        {"name":"Capacidades de Vehículos","request":{"method":"GET","url":{"raw":"{{baseUrlFleet}}/api/flota/vehiculos/capacidades/info","host":["{{baseUrlFleet}}"],"path":["api","flota","vehiculos","capacidades","info"]}}}
+      ]
+    },
+
+    {
+      "name": "Billing (Direct)",
+      "event": [
+        {"listen": "prerequest", "script": {"exec": [
+          "if (pm.environment.get('accessToken')) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') }); }"
+        ]}}
+      ],
+      "item": [
+        {"name":"Calcular Tarifa","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlBilling}}/api/billing/calcular","host":["{{baseUrlBilling}}"],"path":["api","billing","calcular"]},"body":{"mode":"raw","raw":"{\n  \"tipo_entrega\": \"URBANA_RAPIDA\",\n  \"peso_kg\": 2.5,\n  \"distancia_km\": 8\n}"}}},
+        {"name":"Crear Factura","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlBilling}}/api/billing/facturas","host":["{{baseUrlBilling}}"],"path":["api","billing","facturas"]},"body":{"mode":"raw","raw":"{\n  \"pedido_id\": {{pedidoId}},\n  \"cliente_id\": 1,\n  \"distancia_km\": 8,\n  \"peso_kg\": 2.5,\n  \"tipo_entrega\": \"URBANA_RAPIDA\"\n}"}},"event":[{"listen":"test","script":{"exec":["var j=pm.response.json(); pm.environment.set('facturaId', j.id); pm.environment.set('numeroFactura', j.numero_factura);"]}}]},
+        {"name":"Listar Facturas","request":{"method":"GET","url":{"raw":"{{baseUrlBilling}}/api/billing/facturas?limit=10","host":["{{baseUrlBilling}}"],"path":["api","billing","facturas"],"query":[{"key":"limit","value":"10"}]}}},
+        {"name":"Obtener Factura por ID","request":{"method":"GET","url":{"raw":"{{baseUrlBilling}}/api/billing/facturas/{{facturaId}}","host":["{{baseUrlBilling}}"],"path":["api","billing","facturas","{{facturaId}}"]}}},
+        {"name":"Obtener Factura por Número","request":{"method":"GET","url":{"raw":"{{baseUrlBilling}}/api/billing/facturas/numero/{{numeroFactura}}","host":["{{baseUrlBilling}}"],"path":["api","billing","facturas","numero","{{numeroFactura}}"]}}},
+        {"name":"Obtener Factura por Pedido","request":{"method":"GET","url":{"raw":"{{baseUrlBilling}}/api/billing/facturas/pedido/{{pedidoId}}","host":["{{baseUrlBilling}}"],"path":["api","billing","facturas","pedido","{{pedidoId}}"]}}},
+        {"name":"Actualizar Factura (PATCH)","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlBilling}}/api/billing/facturas/{{facturaId}}","host":["{{baseUrlBilling}}"],"path":["api","billing","facturas","{{facturaId}}"]},"body":{"mode":"raw","raw":"{\n  \"estado\": \"EMITIDA\",\n  \"metodo_pago\": \"EFECTIVO\"\n}"}}}
+      ]
+    },
+
+    {
+      "name": "Gateway: Auth",
+      "item": [
+        {"name":"Login via Kong","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlGateway}}/api/auth/login","host":["{{baseUrlGateway}}"],"path":["api","auth","login"]},"body":{"mode":"raw","raw":"{\n  \"username\": \"demo\",\n  \"password\": \"password123\"\n}"}},"event":[{"listen":"test","script":{"exec":["var json = pm.response.json(); if (json.access_token) pm.environment.set('accessToken', json.access_token); if (json.refresh_token) pm.environment.set('refreshToken', json.refresh_token);"]}}]}
+      ]
+    },
+
+    {
+      "name": "Gateway: Pedidos",
+      "event": [
+        {"listen": "prerequest", "script": {"exec": [
+          "if (pm.environment.get('accessToken')) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') }); }"
+        ]}}
+      ],
+      "item": [
+        {"name":"Crear Pedido (Kong)","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlGateway}}/api/pedidos","host":["{{baseUrlGateway}}"],"path":["api","pedidos"]},"body":{"mode":"raw","raw":"{\n  \"cliente_id\": 1,\n  \"origen_direccion\": \"Centro\",\n  \"destino_direccion\": \"Norte\",\n  \"tipo_entrega\": \"URBANA_RAPIDA\",\n  \"descripcion\": \"Caja\",\n  \"peso_kg\": 2.5,\n  \"contacto_nombre\": \"Juan Perez\",\n  \"contacto_telefono\": \"0999999999\"\n}"}},"event":[{"listen":"test","script":{"exec":["var j=pm.response.json(); pm.environment.set('pedidoId', j.id); pm.environment.set('pedidoCodigo', j.codigo);"]}}]},
+        {"name":"Listar Pedidos (Kong)","request":{"method":"GET","url":{"raw":"{{baseUrlGateway}}/api/pedidos?limit=10","host":["{{baseUrlGateway}}"],"path":["api","pedidos"],"query":[{"key":"limit","value":"10"}]}}},
+        {"name":"Obtener Pedido (Kong)","request":{"method":"GET","url":{"raw":"{{baseUrlGateway}}/api/pedidos/{{pedidoId}}","host":["{{baseUrlGateway}}"],"path":["api","pedidos","{{pedidoId}}"]}}},
+        {"name":"Actualizar Pedido (Kong)","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlGateway}}/api/pedidos/{{pedidoId}}","host":["{{baseUrlGateway}}"],"path":["api","pedidos","{{pedidoId}}"]},"body":{"mode":"raw","raw":"{\n  \"estado\": \"ENTREGADO\",\n  \"notas_entrega\": \"Entregado en puerta\"\n}"}}}
+      ]
+    },
+
+    {
+      "name": "Gateway: Flota",
+      "event": [
+        {"listen": "prerequest", "script": {"exec": [
+          "if (pm.environment.get('accessToken')) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') }); }"
+        ]}}
+      ],
+      "item": [
+        {"name":"Listar Repartidores (Kong)","request":{"method":"GET","url":{"raw":"{{baseUrlGateway}}/api/flota/repartidores?limit=10","host":["{{baseUrlGateway}}"],"path":["api","flota","repartidores"],"query":[{"key":"limit","value":"10"}]}}},
+        {"name":"Capacidades (Kong)","request":{"method":"GET","url":{"raw":"{{baseUrlGateway}}/api/flota/vehiculos/capacidades/info","host":["{{baseUrlGateway}}"],"path":["api","flota","vehiculos","capacidades","info"]}}}
+      ]
+    },
+
+    {
+      "name": "Gateway: Billing",
+      "event": [
+        {"listen": "prerequest", "script": {"exec": [
+          "if (pm.environment.get('accessToken')) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') }); }"
+        ]}}
+      ],
+      "item": [
+        {"name":"Calcular Tarifa (Kong)","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrlGateway}}/api/billing/calcular","host":["{{baseUrlGateway}}"],"path":["api","billing","calcular"]},"body":{"mode":"raw","raw":"{\n  \"tipo_entrega\": \"URBANA_RAPIDA\",\n  \"peso_kg\": 2.5,\n  \"distancia_km\": 8\n}"}}},
+        {"name":"Listar Facturas (Kong)","request":{"method":"GET","url":{"raw":"{{baseUrlGateway}}/api/billing/facturas?limit=10","host":["{{baseUrlGateway}}"],"path":["api","billing","facturas"],"query":[{"key":"limit","value":"10"}]}}}
+      ]
+    }
+  ]
+}

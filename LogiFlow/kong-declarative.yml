@@ -1,0 +1,80 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: auth-service
+    url: http://auth-service:5001
+    routes:
+      - name: auth-public
+        paths:
+          - /api/auth
+        strip_path: false
+        methods: ["GET", "POST", "PATCH", "DELETE"]
+
+  - name: pedido-service
+    url: http://pedido-service:5002
+    routes:
+      - name: pedido-routes
+        paths:
+          - /api/pedidos
+        strip_path: false
+        methods: ["GET", "POST", "PATCH", "DELETE"]
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              key_claim_name: "iss"
+              secret_is_base64: false
+          - name: rate-limiting
+            config:
+              minute: 100
+              policy: local
+
+  - name: fleet-service
+    url: http://fleet-service:5003
+    routes:
+      - name: fleet-routes
+        paths:
+          - /api/flota
+        strip_path: false
+        methods: ["GET", "POST", "PATCH", "DELETE"]
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              key_claim_name: "iss"
+          - name: rate-limiting
+            config:
+              minute: 100
+              policy: local
+
+  - name: billing-service
+    url: http://billing-service:5004
+    routes:
+      - name: billing-routes
+        paths:
+          - /api/billing
+        strip_path: false
+        methods: ["GET", "POST", "PATCH", "DELETE"]
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              key_claim_name: "iss"
+          - name: rate-limiting
+            config:
+              minute: 100
+              policy: local
+
+plugins:
+  - name: file-log
+    config:
+      path: /dev/stdout
+
+# Declarative consumers (optional example). In real use, provision via Admin API.
+consumers:
+  - username: logiflow-auth-consumer
+    jwt_secrets:
+      - key: logiflow-auth
+        secret: ${SECRET_KEY}
+        algorithm: HS256
