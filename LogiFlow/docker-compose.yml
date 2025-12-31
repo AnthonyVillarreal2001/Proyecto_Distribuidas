@@ -46,6 +46,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      AUTH_SERVICE_URL: http://auth-service:5001
     ports:
       - "5002:5002"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5002"]
@@ -57,6 +58,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      AUTH_SERVICE_URL: http://auth-service:5001
     ports:
       - "5003:5003"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5003"]
@@ -68,6 +70,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      AUTH_SERVICE_URL: http://auth-service:5001
     ports:
       - "5004:5004"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5004"]

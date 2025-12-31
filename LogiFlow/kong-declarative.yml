@@ -76,5 +76,5 @@ consumers:
   - username: logiflow-auth-consumer
     jwt_secrets:
       - key: logiflow-auth
-        secret: ${SECRET_KEY}
+        secret: logiflow-secret-key-change-in-production-2025
         algorithm: HS256

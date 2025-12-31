@@ -111,6 +111,23 @@ class FleetRepository:
 
         return db_repartidor
 
+    def delete_repartidor_fisico(self, repartidor_id: int) -> bool:
+        """
+        Elimina un repartidor físicamente de la base de datos
+        
+        Returns:
+            True si se eliminó correctamente, False si no se encontró
+        """
+        db_repartidor = self.get_repartidor_by_id(repartidor_id)
+
+        if not db_repartidor:
+            return False
+
+        self.db.delete(db_repartidor)
+        self.db.commit()
+
+        return True
+
     # ========== VEHÍCULOS ==========
 
     def create_vehiculo(

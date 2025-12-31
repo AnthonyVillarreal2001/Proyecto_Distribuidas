@@ -137,3 +137,20 @@ class BillingRepository:
         self.db.refresh(db_factura)
 
         return db_factura
+
+    def delete_factura_fisica(self, factura_id: int) -> bool:
+        """
+        Elimina una factura físicamente de la base de datos
+        
+        Returns:
+            True si se eliminó correctamente, False si no se encontró
+        """
+        db_factura = self.get_factura_by_id(factura_id)
+
+        if not db_factura:
+            return False
+
+        self.db.delete(db_factura)
+        self.db.commit()
+
+        return True

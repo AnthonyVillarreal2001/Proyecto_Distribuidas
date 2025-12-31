@@ -79,7 +79,8 @@ def verify_token(token: str,
     try:
         payload = jwt.decode(token,
                              settings.secret_key,
-                             algorithms=[settings.algorithm])
+                             algorithms=[settings.algorithm],
+                             options={"verify_exp": True})
 
         if payload.get("type") != token_type:
             return None

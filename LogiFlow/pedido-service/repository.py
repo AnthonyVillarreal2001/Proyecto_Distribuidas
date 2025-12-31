@@ -181,3 +181,20 @@ class PedidoRepository:
         self.db.refresh(db_pedido)
 
         return db_pedido
+
+    def delete_pedido_fisico(self, pedido_id: int) -> bool:
+        """
+        Elimina un pedido físicamente de la base de datos
+        
+        Returns:
+            True si se eliminó correctamente, False si no se encontró
+        """
+        db_pedido = self.get_pedido_by_id(pedido_id)
+
+        if not db_pedido:
+            return False
+
+        self.db.delete(db_pedido)
+        self.db.commit()
+
+        return True

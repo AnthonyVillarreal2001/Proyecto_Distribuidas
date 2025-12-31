@@ -222,6 +222,11 @@ def verify_access_token(token: str):
     
     - **token**: Access token a verificar
     """
+    if not token or token.strip() == "":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token parameter is required and cannot be empty")
+
     token_data = auth.verify_token(token, token_type="access")
 
     if not token_data:

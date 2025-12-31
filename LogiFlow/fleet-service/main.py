@@ -10,10 +10,12 @@ sys.path.append('..')
 from shared.database import get_db, Base, engine
 from shared.config import get_settings
 from shared.enums import EstadoRepartidor, TipoVehiculo
+from shared.schemas import TokenData
 import models
 import schemas
 import repository
 import vehiculo_hierarchy
+import auth_dependency
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -53,7 +55,9 @@ def root():
           response_model=schemas.RepartidorResponse,
           status_code=status.HTTP_201_CREATED)
 def crear_repartidor(repartidor_data: schemas.RepartidorCreate,
-                     db: Session = Depends(get_db)):
+                     db: Session = Depends(get_db),
+                     current_user: TokenData = Depends(
+                         auth_dependency.require_roles(["ADMIN", "GERENTE"]))):
     """
     Crear nuevo repartidor
     
@@ -80,7 +84,9 @@ def listar_repartidores(skip: int = Query(0, ge=0),
                         limit: int = Query(100, ge=1, le=1000),
                         estado: Optional[EstadoRepartidor] = None,
                         zona_id: Optional[str] = None,
-                        db: Session = Depends(get_db)):
+                        db: Session = Depends(get_db),
+                        current_user: TokenData = Depends(
+                            auth_dependency.get_current_user)):
     """
     Listar repartidores con filtros opcionales
     
@@ -105,7 +111,10 @@ def listar_repartidores(skip: int = Query(0, ge=0),
 
 @app.get("/api/flota/repartidores/{repartidor_id}",
          response_model=schemas.RepartidorResponse)
-def obtener_repartidor(repartidor_id: int, db: Session = Depends(get_db)):
+def obtener_repartidor(repartidor_id: int,
+                       db: Session = Depends(get_db),
+                       current_user: TokenData = Depends(
+                           auth_dependency.get_current_user)):
     """Obtener repartidor por ID"""
     repo = repository.FleetRepository(db)
 
@@ -122,7 +131,9 @@ def obtener_repartidor(repartidor_id: int, db: Session = Depends(get_db)):
            response_model=schemas.RepartidorResponse)
 def actualizar_repartidor(repartidor_id: int,
                           update_data: schemas.RepartidorUpdate,
-                          db: Session = Depends(get_db)):
+                          db: Session = Depends(get_db),
+                          current_user: TokenData = Depends(
+                              auth_dependency.get_current_user)):
     """
     Actualizar repartidor (PATCH)
     
@@ -140,6 +151,28 @@ def actualizar_repartidor(repartidor_id: int,
     return schemas.RepartidorResponse.model_validate(db_repartidor)
 
 
+@app.delete("/api/flota/repartidores/{repartidor_id}/del",
+            status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_repartidor_permanente(repartidor_id: int,
+                                   db: Session = Depends(get_db),
+                                   current_user: TokenData = Depends(
+                                       auth_dependency.require_roles(["ADMIN"
+                                                                      ]))):
+    """
+    Eliminar repartidor permanentemente de la base de datos (solo ADMIN)
+    
+    ADVERTENCIA: Esta operación es irreversible.
+    Solo usuarios con rol ADMIN pueden realizar eliminación permanente.
+    """
+    repo = repository.FleetRepository(db)
+
+    if not repo.delete_repartidor_fisico(repartidor_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Repartidor {repartidor_id} no encontrado")
+
+    return None
+
+
 # ========== VEHÍCULOS ==========
 
 
@@ -147,7 +180,9 @@ def actualizar_repartidor(repartidor_id: int,
           response_model=schemas.VehiculoResponse,
           status_code=status.HTTP_201_CREATED)
 def crear_vehiculo(vehiculo_data: schemas.VehiculoCreate,
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db),
+                   current_user: TokenData = Depends(
+                       auth_dependency.require_roles(["ADMIN", "GERENTE"]))):
     """
     Crear nuevo vehículo
     
@@ -176,7 +211,9 @@ def listar_vehiculos(skip: int = Query(0, ge=0),
                      limit: int = Query(100, ge=1, le=1000),
                      tipo: Optional[TipoVehiculo] = None,
                      repartidor_id: Optional[int] = None,
-                     db: Session = Depends(get_db)):
+                     db: Session = Depends(get_db),
+                     current_user: TokenData = Depends(
+                         auth_dependency.get_current_user)):
     """
     Listar vehículos con filtros opcionales
     
@@ -199,7 +236,10 @@ def listar_vehiculos(skip: int = Query(0, ge=0),
 
 @app.get("/api/flota/vehiculos/{vehiculo_id}",
          response_model=schemas.VehiculoResponse)
-def obtener_vehiculo(vehiculo_id: int, db: Session = Depends(get_db)):
+def obtener_vehiculo(vehiculo_id: int,
+                     db: Session = Depends(get_db),
+                     current_user: TokenData = Depends(
+                         auth_dependency.get_current_user)):
     """Obtener vehículo por ID"""
     repo = repository.FleetRepository(db)
 
@@ -216,7 +256,9 @@ def obtener_vehiculo(vehiculo_id: int, db: Session = Depends(get_db)):
            response_model=schemas.VehiculoResponse)
 def actualizar_vehiculo(vehiculo_id: int,
                         update_data: schemas.VehiculoUpdate,
-                        db: Session = Depends(get_db)):
+                        db: Session = Depends(get_db),
+                        current_user: TokenData = Depends(
+                            auth_dependency.get_current_user)):
     """
     Actualizar vehículo (PATCH)
     
@@ -231,6 +273,28 @@ def actualizar_vehiculo(vehiculo_id: int,
                             detail=f"Vehículo {vehiculo_id} no encontrado")
 
     return schemas.VehiculoResponse.model_validate(db_vehiculo)
+
+
+@app.delete("/api/flota/vehiculos/{vehiculo_id}/del",
+            status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_vehiculo_permanente(vehiculo_id: int,
+                                 db: Session = Depends(get_db),
+                                 current_user: TokenData = Depends(
+                                     auth_dependency.require_roles(["ADMIN"
+                                                                    ]))):
+    """
+    Eliminar vehículo permanentemente de la base de datos (solo ADMIN)
+    
+    ADVERTENCIA: Esta operación es irreversible.
+    Solo usuarios con rol ADMIN pueden realizar eliminación permanente.
+    """
+    repo = repository.FleetRepository(db)
+
+    if not repo.delete_vehiculo_fisico(vehiculo_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Vehículo {vehiculo_id} no encontrado")
+
+    return None
 
 
 @app.get("/api/flota/vehiculos/capacidades/info")

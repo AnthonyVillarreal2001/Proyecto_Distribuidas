@@ -10,9 +10,11 @@ sys.path.append('..')
 from shared.database import get_db, Base, engine
 from shared.config import get_settings
 from shared.enums import EstadoPedido
+from shared.schemas import TokenData
 import models
 import schemas
 import repository
+import auth_dependency
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -49,7 +51,8 @@ def root():
           response_model=schemas.PedidoResponse,
           status_code=status.HTTP_201_CREATED)
 def crear_pedido(pedido_data: schemas.PedidoCreate,
-                 db: Session = Depends(get_db)):
+                 db: Session = Depends(get_db),
+                 current_user: TokenData = Depends(auth_dependency.get_current_user)):
     """
     Crear nuevo pedido
     
@@ -78,7 +81,8 @@ def listar_pedidos(skip: int = Query(0, ge=0),
                    estado: Optional[EstadoPedido] = None,
                    cliente_id: Optional[int] = None,
                    repartidor_id: Optional[int] = None,
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db),
+                   current_user: TokenData = Depends(auth_dependency.get_current_user)):
     """
     Listar pedidos con filtros opcionales
     
@@ -102,7 +106,9 @@ def listar_pedidos(skip: int = Query(0, ge=0),
 
 
 @app.get("/api/pedidos/{pedido_id}", response_model=schemas.PedidoResponse)
-def obtener_pedido(pedido_id: int, db: Session = Depends(get_db)):
+def obtener_pedido(pedido_id: int,
+                   db: Session = Depends(get_db),
+                   current_user: TokenData = Depends(auth_dependency.get_current_user)):
     """
     Obtener pedido por ID
     """
@@ -118,7 +124,9 @@ def obtener_pedido(pedido_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/pedidos/codigo/{codigo}", response_model=schemas.PedidoResponse)
-def obtener_pedido_por_codigo(codigo: str, db: Session = Depends(get_db)):
+def obtener_pedido_por_codigo(codigo: str,
+                              db: Session = Depends(get_db),
+                              current_user: TokenData = Depends(auth_dependency.get_current_user)):
     """
     Obtener pedido por código (P-00001)
     """
@@ -136,7 +144,8 @@ def obtener_pedido_por_codigo(codigo: str, db: Session = Depends(get_db)):
 @app.patch("/api/pedidos/{pedido_id}", response_model=schemas.PedidoResponse)
 def actualizar_pedido(pedido_id: int,
                       update_data: schemas.PedidoUpdate,
-                      db: Session = Depends(get_db)):
+                      db: Session = Depends(get_db),
+                      current_user: TokenData = Depends(auth_dependency.get_current_user)):
     """
     Actualizar pedido parcialmente (PATCH)
     
@@ -157,7 +166,8 @@ def actualizar_pedido(pedido_id: int,
 @app.delete("/api/pedidos/{pedido_id}", response_model=schemas.PedidoResponse)
 def cancelar_pedido(pedido_id: int,
                     cancelacion: schemas.PedidoCancelacion,
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db),
+                    current_user: TokenData = Depends(auth_dependency.require_roles(["ADMIN", "GERENTE", "SUPERVISOR", "CLIENTE"]))):
     """
     Cancelar pedido (cancelación lógica)
     
@@ -180,6 +190,28 @@ def cancelar_pedido(pedido_id: int,
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=str(e))
+
+
+@app.delete("/api/pedidos/{pedido_id}/del",
+            status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_pedido_permanente(
+        pedido_id: int,
+        db: Session = Depends(get_db),
+        current_user: TokenData = Depends(
+            auth_dependency.require_roles(["ADMIN"]))):
+    """
+    Eliminar pedido permanentemente de la base de datos (solo ADMIN)
+    
+    ADVERTENCIA: Esta operación es irreversible.
+    Solo usuarios con rol ADMIN pueden realizar eliminación permanente.
+    """
+    repo = repository.PedidoRepository(db)
+
+    if not repo.delete_pedido_fisico(pedido_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Pedido {pedido_id} no encontrado")
+
+    return None
 
 
 if __name__ == "__main__":

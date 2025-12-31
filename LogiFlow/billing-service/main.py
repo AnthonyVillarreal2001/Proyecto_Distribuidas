@@ -10,10 +10,12 @@ sys.path.append('..')
 from shared.database import get_db, Base, engine
 from shared.config import get_settings
 from shared.enums import EstadoFactura
+from shared.schemas import TokenData
 import models
 import schemas
 import repository
 import calculator
+import auth_dependency
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -77,7 +79,9 @@ def calcular_tarifa(calculo_request: schemas.TarifaCalculoRequest):
           response_model=schemas.FacturaResponse,
           status_code=status.HTTP_201_CREATED)
 def crear_factura(factura_data: schemas.FacturaCreate,
-                  db: Session = Depends(get_db)):
+                  db: Session = Depends(get_db),
+                  current_user: TokenData = Depends(
+                      auth_dependency.get_current_user)):
     """
     Generar factura para un pedido
     
@@ -112,7 +116,9 @@ def listar_facturas(skip: int = Query(0, ge=0),
                     limit: int = Query(100, ge=1, le=1000),
                     estado: Optional[EstadoFactura] = None,
                     cliente_id: Optional[int] = None,
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db),
+                    current_user: TokenData = Depends(
+                        auth_dependency.get_current_user)):
     """
     Listar facturas con filtros opcionales
     
@@ -135,7 +141,10 @@ def listar_facturas(skip: int = Query(0, ge=0),
 
 @app.get("/api/billing/facturas/{factura_id}",
          response_model=schemas.FacturaResponse)
-def obtener_factura(factura_id: int, db: Session = Depends(get_db)):
+def obtener_factura(factura_id: int,
+                    db: Session = Depends(get_db),
+                    current_user: TokenData = Depends(
+                        auth_dependency.get_current_user)):
     """Obtener factura por ID"""
     repo = repository.BillingRepository(db)
 
@@ -151,7 +160,9 @@ def obtener_factura(factura_id: int, db: Session = Depends(get_db)):
 @app.get("/api/billing/facturas/numero/{numero_factura}",
          response_model=schemas.FacturaResponse)
 def obtener_factura_por_numero(numero_factura: str,
-                               db: Session = Depends(get_db)):
+                               db: Session = Depends(get_db),
+                               current_user: TokenData = Depends(
+                                   auth_dependency.get_current_user)):
     """Obtener factura por número (F-00001)"""
     repo = repository.BillingRepository(db)
 
@@ -166,7 +177,10 @@ def obtener_factura_por_numero(numero_factura: str,
 
 @app.get("/api/billing/facturas/pedido/{pedido_id}",
          response_model=schemas.FacturaResponse)
-def obtener_factura_por_pedido(pedido_id: int, db: Session = Depends(get_db)):
+def obtener_factura_por_pedido(pedido_id: int,
+                               db: Session = Depends(get_db),
+                               current_user: TokenData = Depends(
+                                   auth_dependency.get_current_user)):
     """Obtener factura asociada a un pedido"""
     repo = repository.BillingRepository(db)
 
@@ -184,7 +198,9 @@ def obtener_factura_por_pedido(pedido_id: int, db: Session = Depends(get_db)):
            response_model=schemas.FacturaResponse)
 def actualizar_factura(factura_id: int,
                        update_data: schemas.FacturaUpdate,
-                       db: Session = Depends(get_db)):
+                       db: Session = Depends(get_db),
+                       current_user: TokenData = Depends(
+                           auth_dependency.get_current_user)):
     """
     Actualizar factura (PATCH)
     
@@ -200,6 +216,27 @@ def actualizar_factura(factura_id: int,
                             detail=f"Factura {factura_id} no encontrada")
 
     return schemas.FacturaResponse.model_validate(db_factura)
+
+
+@app.delete("/api/billing/facturas/{factura_id}/del",
+            status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_factura_permanente(factura_id: int,
+                                db: Session = Depends(get_db),
+                                current_user: TokenData = Depends(
+                                    auth_dependency.require_roles(["ADMIN"]))):
+    """
+    Eliminar factura permanentemente de la base de datos (solo ADMIN)
+    
+    ADVERTENCIA: Esta operación es irreversible.
+    Solo usuarios con rol ADMIN pueden realizar eliminación permanente.
+    """
+    repo = repository.BillingRepository(db)
+
+    if not repo.delete_factura_fisica(factura_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Factura {factura_id} no encontrada")
+
+    return None
 
 
 if __name__ == "__main__":
