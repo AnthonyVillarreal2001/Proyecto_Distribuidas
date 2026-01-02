@@ -64,6 +64,8 @@ Servicios detrás de Kong:
 - FleetService: `http://localhost:8000/api/flota`
 - BillingService: `http://localhost:8000/api/billing`
 
+Incluye base de datos **PostgreSQL** dockerizada accesible en `postgres:5432` dentro de la red `logiflow-net`.
+
 Para detener:
 
 ```bash
@@ -171,6 +173,39 @@ La cancelación lógica de pedidos se mantiene en `DELETE /api/pedidos/{id}` con
   - `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `DATABASE_URL`
   - URLs/puertos de servicios
 - En Docker Compose, los servicios internos consumen `AUTH_SERVICE_URL=http://auth-service:5001` para verificación entre contenedores.
+
+### Base de Datos PostgreSQL (Local)
+
+El sistema usa por defecto una base de datos PostgreSQL dockerizada, y también puede conectarse a una instancia local (fuera de Docker). Se recomienda crear la base con nombre `logiflow_db`.
+
+1. Instale PostgreSQL localmente y asegúrese de tener el usuario `postgres` habilitado.
+2. Cree la base de datos:
+
+```bash
+psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE logiflow_db;"
+```
+
+3. Configure el archivo `.env`:
+
+- Para ejecutar servicios directamente en host:
+
+```env
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/logiflow_db
+```
+
+- Para ejecutar servicios en Docker apuntando a la base dockerizada:
+
+```env
+DATABASE_URL_DOCKER=postgresql+psycopg2://postgres:postgres@postgres:5432/logiflow_db
+```
+
+4. Aplique migraciones/creación de tablas en el primer arranque (los servicios crean tablas automáticamente con SQLAlchemy). Si usa Alembic, ejecute:
+
+```bash
+alembic upgrade head
+```
+
+Nota: En Linux, `host.docker.internal` puede no estar disponible. Use la IP del host o configure `extra_hosts` en Docker.
 
 ### Arquitectura
 

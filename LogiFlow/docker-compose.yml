@@ -24,6 +24,7 @@ services:
       - pedido-service
       - fleet-service
       - billing-service
+      - postgres
 
   auth-service:
     build:
@@ -31,13 +32,15 @@ services:
       dockerfile: ./auth-service/Dockerfile
     environment:
       PYTHONUNBUFFERED: "1"
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql+psycopg2://postgres:postgres@postgres:5432/logiflow_db}
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
     ports:
       - "5001:5001"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5001"]
+    depends_on:
+      - postgres
 
   pedido-service:
     build:
@@ -45,11 +48,13 @@ services:
       dockerfile: ./pedido-service/Dockerfile
     environment:
       PYTHONUNBUFFERED: "1"
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql+psycopg2://postgres:postgres@postgres:5432/logiflow_db}
       AUTH_SERVICE_URL: http://auth-service:5001
     ports:
       - "5002:5002"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5002"]
+    depends_on:
+      - postgres
 
   fleet-service:
     build:
@@ -57,11 +62,13 @@ services:
       dockerfile: ./fleet-service/Dockerfile
     environment:
       PYTHONUNBUFFERED: "1"
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql+psycopg2://postgres:postgres@postgres:5432/logiflow_db}
       AUTH_SERVICE_URL: http://auth-service:5001
     ports:
       - "5003:5003"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5003"]
+    depends_on:
+      - postgres
 
   billing-service:
     build:
@@ -69,12 +76,29 @@ services:
       dockerfile: ./billing-service/Dockerfile
     environment:
       PYTHONUNBUFFERED: "1"
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///./logiflow.db}
+      DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql+psycopg2://postgres:postgres@postgres:5432/logiflow_db}
       AUTH_SERVICE_URL: http://auth-service:5001
     ports:
       - "5004:5004"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5004"]
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-logiflow_db}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
 networks:
   default:
     name: logiflow-net
+
+volumes:
+  postgres_data:
