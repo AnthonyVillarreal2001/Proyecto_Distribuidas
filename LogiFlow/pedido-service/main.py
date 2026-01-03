@@ -7,7 +7,7 @@ import sys
 
 sys.path.append('..')
 
-from shared.database import get_db, Base, engine
+from shared.database import get_db, Base, engine, wait_for_database
 from shared.config import get_settings
 from shared.enums import EstadoPedido
 from shared.schemas import TokenData
@@ -16,7 +16,8 @@ import schemas
 import repository
 import auth_dependency
 
-# Create tables
+# Wait for DB and create tables
+wait_for_database()
 Base.metadata.create_all(bind=engine)
 
 settings = get_settings()
@@ -52,7 +53,8 @@ def root():
           status_code=status.HTTP_201_CREATED)
 def crear_pedido(pedido_data: schemas.PedidoCreate,
                  db: Session = Depends(get_db),
-                 current_user: TokenData = Depends(auth_dependency.get_current_user)):
+                 current_user: TokenData = Depends(
+                     auth_dependency.get_current_user)):
     """
     Crear nuevo pedido
     
@@ -82,7 +84,8 @@ def listar_pedidos(skip: int = Query(0, ge=0),
                    cliente_id: Optional[int] = None,
                    repartidor_id: Optional[int] = None,
                    db: Session = Depends(get_db),
-                   current_user: TokenData = Depends(auth_dependency.get_current_user)):
+                   current_user: TokenData = Depends(
+                       auth_dependency.get_current_user)):
     """
     Listar pedidos con filtros opcionales
     
@@ -108,7 +111,8 @@ def listar_pedidos(skip: int = Query(0, ge=0),
 @app.get("/api/pedidos/{pedido_id}", response_model=schemas.PedidoResponse)
 def obtener_pedido(pedido_id: int,
                    db: Session = Depends(get_db),
-                   current_user: TokenData = Depends(auth_dependency.get_current_user)):
+                   current_user: TokenData = Depends(
+                       auth_dependency.get_current_user)):
     """
     Obtener pedido por ID
     """
@@ -126,7 +130,8 @@ def obtener_pedido(pedido_id: int,
 @app.get("/api/pedidos/codigo/{codigo}", response_model=schemas.PedidoResponse)
 def obtener_pedido_por_codigo(codigo: str,
                               db: Session = Depends(get_db),
-                              current_user: TokenData = Depends(auth_dependency.get_current_user)):
+                              current_user: TokenData = Depends(
+                                  auth_dependency.get_current_user)):
     """
     Obtener pedido por código (P-00001)
     """
@@ -145,7 +150,8 @@ def obtener_pedido_por_codigo(codigo: str,
 def actualizar_pedido(pedido_id: int,
                       update_data: schemas.PedidoUpdate,
                       db: Session = Depends(get_db),
-                      current_user: TokenData = Depends(auth_dependency.get_current_user)):
+                      current_user: TokenData = Depends(
+                          auth_dependency.get_current_user)):
     """
     Actualizar pedido parcialmente (PATCH)
     
@@ -167,7 +173,9 @@ def actualizar_pedido(pedido_id: int,
 def cancelar_pedido(pedido_id: int,
                     cancelacion: schemas.PedidoCancelacion,
                     db: Session = Depends(get_db),
-                    current_user: TokenData = Depends(auth_dependency.require_roles(["ADMIN", "GERENTE", "SUPERVISOR", "CLIENTE"]))):
+                    current_user: TokenData = Depends(
+                        auth_dependency.require_roles(
+                            ["ADMIN", "GERENTE", "SUPERVISOR", "CLIENTE"]))):
     """
     Cancelar pedido (cancelación lógica)
     
@@ -194,11 +202,10 @@ def cancelar_pedido(pedido_id: int,
 
 @app.delete("/api/pedidos/{pedido_id}/del",
             status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_pedido_permanente(
-        pedido_id: int,
-        db: Session = Depends(get_db),
-        current_user: TokenData = Depends(
-            auth_dependency.require_roles(["ADMIN"]))):
+def eliminar_pedido_permanente(pedido_id: int,
+                               db: Session = Depends(get_db),
+                               current_user: TokenData = Depends(
+                                   auth_dependency.require_roles(["ADMIN"]))):
     """
     Eliminar pedido permanentemente de la base de datos (solo ADMIN)
     

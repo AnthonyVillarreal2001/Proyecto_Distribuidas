@@ -66,6 +66,39 @@ services:
               minute: 100
               policy: local
 
+  - name: realtime-service
+    url: http://realtime-service:5005
+    routes:
+      - name: realtime-ws
+        paths:
+          - /api/ws
+        strip_path: false
+        protocols: ["http", "https"]
+        methods: ["GET", "POST"]
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              key_claim_name: "iss"
+
+  - name: graphql-service
+    url: http://graphql-service:5006
+    routes:
+      - name: graphql-routes
+        paths:
+          - /graphql
+        strip_path: false
+        methods: ["GET", "POST"]
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              key_claim_name: "iss"
+          - name: rate-limiting
+            config:
+              minute: 200
+              policy: local
+
 plugins:
   - name: file-log
     config:

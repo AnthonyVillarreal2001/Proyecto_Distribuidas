@@ -24,7 +24,10 @@ services:
       - pedido-service
       - fleet-service
       - billing-service
+      - realtime-service
+      - graphql-service
       - postgres
+      - rabbitmq
 
   auth-service:
     build:
@@ -81,8 +84,60 @@ services:
     ports:
       - "5004:5004"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5004"]
+
+  realtime-service:
+    build:
+      context: .
+      dockerfile: ./realtime-service/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:5001}
+    ports:
+      - "5005:5005"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5005"]
     depends_on:
-      - postgres
+      - rabbitmq
+
+  graphql-service:
+    build:
+      context: .
+      dockerfile: ./graphql-service/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+      AUTH_SERVICE_URL: http://auth-service:5001
+      PEDIDO_SERVICE_URL: http://pedido-service:5002
+      BILLING_SERVICE_URL: http://billing-service:5004
+      FLEET_SERVICE_URL: http://fleet-service:5003
+    ports:
+      - "5006:5006"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5006"]
+    depends_on:
+      - auth-service
+      - pedido-service
+      - billing-service
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./notification-service/Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+      AUTH_SERVICE_URL: http://auth-service:5001
+    ports:
+      - "5007:5007"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5007"]
+    depends_on:
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
 
   postgres:
     image: postgres:15
@@ -92,9 +147,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-logiflow_db}
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-logiflow_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 networks:
   default:

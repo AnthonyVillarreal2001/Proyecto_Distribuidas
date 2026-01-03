@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "sqlite:///./logiflow.db"
+    database_url: str = "postgresql+psycopg2://postgres:postgres@postgres:5432/logiflow_db"
 
     # JWT
     secret_key: str = "your-secret-key-change-this-in-production"
@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     pedido_service_url: str = "http://localhost:5002"
     fleet_service_url: str = "http://localhost:5003"
     billing_service_url: str = "http://localhost:5004"
+    ws_service_port: int = 5005
+    ws_service_url: str = "http://localhost:5005"
+
+    # Messaging (RabbitMQ)
+    rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
 
     # CORS
     cors_origins: list = ["http://localhost:3000", "http://localhost:5000"]

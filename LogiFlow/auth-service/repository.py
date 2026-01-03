@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 from typing import Optional
 import models
@@ -70,19 +71,36 @@ class AuthRepository:
 
     def save_refresh_token(self, user_id: int,
                            token: str) -> models.RefreshToken:
-        """Guarda refresh token - Transacción ACID"""
+        """Guarda refresh token - Transacción ACID.
+
+        Maneja colisiones de token único devolviendo el existente en caso de
+        duplicado, evitando errores 500 por UniqueViolation.
+        """
         expires_at = datetime.utcnow() + timedelta(
             days=settings.refresh_token_expire_days)
 
         db_token = models.RefreshToken(user_id=user_id,
                                        token=token,
                                        expires_at=expires_at)
-
-        self.db.add(db_token)
-        self.db.commit()
-        self.db.refresh(db_token)
-
-        return db_token
+        try:
+            self.db.add(db_token)
+            self.db.commit()
+            self.db.refresh(db_token)
+            return db_token
+        except IntegrityError:
+            self.db.rollback()
+            existing = self.get_refresh_token(token)
+            if existing:
+                return existing
+            # If the existing token is revoked, generate a new one and retry once
+            new_token = auth.create_refresh_token({"sub": str(user_id)})
+            retry = models.RefreshToken(user_id=user_id,
+                                        token=new_token,
+                                        expires_at=expires_at)
+            self.db.add(retry)
+            self.db.commit()
+            self.db.refresh(retry)
+            return retry
 
     def get_refresh_token(self, token: str) -> Optional[models.RefreshToken]:
         """Obtiene refresh token"""

@@ -2,6 +2,7 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
+from uuid import uuid4
 import sys
 
 sys.path.append('..')
@@ -65,6 +66,7 @@ def create_refresh_token(data: dict,
         "iat": datetime.utcnow(),
         "type": "refresh",
         "iss": settings.jwt_issuer,
+        "jti": str(uuid4()),
     })
 
     encoded_jwt = jwt.encode(to_encode,
@@ -85,11 +87,17 @@ def verify_token(token: str,
         if payload.get("type") != token_type:
             return None
 
-        user_id: int = payload.get("sub")
-        role: str = payload.get("role")
-
-        if user_id is None or role is None:
+        user_id = payload.get("sub")
+        if user_id is None:
             return None
+
+        # Access tokens carry role and other claims; refresh tokens may not.
+        if token_type == "access":
+            role = payload.get("role")
+            if role is None:
+                return None
+        else:
+            role = payload.get("role", "REFRESH")
 
         token_data = TokenData(user_id=int(user_id),
                                role=role,

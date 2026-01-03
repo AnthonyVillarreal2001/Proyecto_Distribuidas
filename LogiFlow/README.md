@@ -64,7 +64,7 @@ Servicios detrás de Kong:
 - FleetService: `http://localhost:8000/api/flota`
 - BillingService: `http://localhost:8000/api/billing`
 
-Incluye base de datos **PostgreSQL** dockerizada accesible en `postgres:5432` dentro de la red `logiflow-net`.
+Incluye base de datos **PostgreSQL** dockerizada accesible en `postgres:5432` dentro de la red `logiflow-net` y expuesta al host en `localhost:5432`.
 
 Para detener:
 
@@ -240,10 +240,76 @@ LogiFlow/
 pytest
 ```
 
+## Fase 2: GraphQL, Mensajería y WebSockets
+
+### Componentes
+
+- **GraphQL (Strawberry) [5006]**: Exposición de agregados sobre REST con tipos y resolvers en `graphql-service/main.py`. SDL en `graphql-service/schema.graphqls`.
+- **RabbitMQ [5672/15672]**: Broker de mensajería para eventos de pedido y tracking. Definiciones en `scripts/rabbitmq-definitions.json` (exchanges/queues/bindings y política TTL/HA).
+- **RealtimeService (WebSocket) [5005]**: Servidor WebSocket con validación JWT en handshake (`/api/ws/track`). Suscripciones por tópico y broadcast selectivo.
+- **NotificationService [5007]**: Consumidor de `pedido.estado.*` que registra eventos (simula envío).
+
+### GraphQL Schema y Resolvers
+
+- Queries implementadas:
+  - `pedido_by_id(id: ID!): Pedido`
+  - `pedidos(limit: Int): [Pedido!]!`
+  - `flota_activa(zona_id: ID!): FlotaResumen!`
+  - `kpi_diario(fecha: Date!, zona_id: ID): KPIDiario!`
+- Mutations:
+  - `crear_pedido(...)`
+  - `crear_factura(...)`
+- Métricas de caché: `cache_stats { hits, misses }` via cache interna para evitar N+1.
+
+### Mensajería (RabbitMQ)
+
+- Exchange `logiflow.events` (topic)
+- Queues:
+  - `realtime.broadcast` ← `realtime.*`
+  - `notification.pedido` ← `pedido.estado.*`
+- Políticas: `ttl_policy` (TTL 24h) y HA `all` (replicación en cluster)
+
+### WebSocket `/api/ws/track`
+
+- Handshake exige `Authorization: Bearer <JWT>` (validado contra AuthService).
+- Suscripción por tópico: enviar `{ "type": "subscribe", "topic": "realtime.location" }`.
+- Logs de conexiones, suscripciones y desconexiones.
+
+### Flujo de Eventos (Mermaid)
+
+```mermaid
+sequenceDiagram
+   participant C as Cliente (REST)
+   participant P as PedidoService
+   participant MQ as RabbitMQ (logiflow.events)
+   participant N as NotificationService
+   participant R as RealtimeService (WS)
+   participant W as WebSocket Cliente (wscat)
+
+   C->>P: PATCH /api/pedidos/{id} estado=EN_RUTA
+   P->>MQ: publish pedido.estado.actualizado
+   MQ->>N: deliver pedido.estado.actualizado
+   N->>N: Log "Notificación enviada (simulada)"
+   MQ->>R: deliver realtime.location (tracking)
+   R->>W: broadcast selectivo (topic)
+```
+
+### Pruebas de Integración (rápidas)
+
+1. Actualizar estado de pedido:
+  - `PATCH http://localhost:8000/api/pedidos/{id}` body `{ "estado": "EN_RUTA" }`.
+2. Verificar cola:
+  - Abrir RabbitMQ UI `http://localhost:15672` (guest/guest) → Queue `notification.pedido` → mensajes ↑.
+3. Consumidor:
+  - Logs de `notification-service` muestran evento recibido.
+4. WebSocket:
+  - Conectar `wscat -c ws://localhost:8000/api/ws/track?topic=realtime.location -H "Authorization: Bearer <token>"`.
+  - Ver broadcasts al publicar en `POST http://localhost:8000/api/ws/publish`.
+
+
 ### Autor
 
 Proyecto integrador de Aplicaciones Distribuidas
 
 Copyright © 2025 AlexGames Studios, Patty Entertainment y Villa Productions. 
 All rights reserved.
-

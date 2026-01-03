@@ -1,0 +1,83 @@
+# GraphQL SDL for LogiFlow
+
+scalar Date
+
+type Pedido {
+  id: ID!
+  codigo: String!
+  cliente_id: Int!
+  repartidor_id: Int
+  origen_direccion: String!
+  destino_direccion: String!
+  tipo_entrega: String!
+  estado: String!
+  peso_kg: Float!
+}
+
+type Factura {
+  id: ID!
+  numero_factura: String!
+  pedido_id: Int!
+  cliente_id: Int!
+  total: Float!
+  estado: String!
+}
+
+type Tarifa {
+  subtotal: Float!
+  impuestos: Float!
+  total: Float!
+}
+
+type FlotaResumen {
+  zona_id: ID
+  total_disponible: Int!
+  total_en_ruta: Int!
+}
+
+type KPIDiario {
+  fecha: Date!
+  zona_id: ID
+  total_pedidos: Int!
+  entregados: Int!
+  cancelados: Int!
+}
+
+input PedidoFiltro {
+  estado: String
+  cliente_id: Int
+  repartidor_id: Int
+}
+
+type Query {
+  pedido_by_id(id: ID!): Pedido
+  pedidos(limit: Int = 10): [Pedido!]!
+  flotaActiva(zona_id: ID!): FlotaResumen!
+  kpiDiario(fecha: Date!, zona_id: ID): KPIDiario!
+  cache_stats: CacheStats!
+}
+
+type CacheStats {
+  hits: Int!
+  misses: Int!
+}
+
+type Mutation {
+  crear_pedido(
+    cliente_id: Int!,
+    origen_direccion: String!,
+    destino_direccion: String!,
+    tipo_entrega: String!,
+    descripcion: String!,
+    peso_kg: Float!,
+    contacto_nombre: String!,
+    contacto_telefono: String!
+  ): Pedido!
+  crear_factura(
+    pedido_id: Int!,
+    cliente_id: Int!,
+    tipo_entrega: String!,
+    peso_kg: Float!,
+    distancia_km: Float!
+  ): Factura!
+}

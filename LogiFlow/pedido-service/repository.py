@@ -5,9 +5,15 @@ import models
 import schemas
 import factory
 import sys
+import json
+import pika
+import httpx
 
 sys.path.append('..')
 from shared.enums import EstadoPedido, TipoEntrega
+from shared.config import get_settings
+
+settings = get_settings()
 
 
 class PedidoRepository:
@@ -131,6 +137,7 @@ class PedidoRepository:
         # Actualizar campos proporcionados
         update_dict = update_data.model_dump(exclude_unset=True)
 
+        estado_cambiado = False
         for field, value in update_dict.items():
             if field == "estado":
                 # Actualizar timestamps según estado
@@ -140,7 +147,7 @@ class PedidoRepository:
                     db_pedido.en_ruta_at = datetime.utcnow()
                 elif value == EstadoPedido.ENTREGADO:
                     db_pedido.entregado_at = datetime.utcnow()
-
+                estado_cambiado = True
                 setattr(db_pedido, field, value.value)
             else:
                 setattr(db_pedido, field, value)
@@ -149,6 +156,41 @@ class PedidoRepository:
 
         self.db.commit()
         self.db.refresh(db_pedido)
+
+        # Publicar evento de cambio de estado en RabbitMQ
+        if estado_cambiado:
+            payload = {
+                "type": "pedido.estado.actualizado",
+                "data": {
+                    "pedido_id": db_pedido.id,
+                    "codigo": db_pedido.codigo,
+                    "estado": db_pedido.estado,
+                    "zona_id": db_pedido.zona_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            }
+            try:
+                params = pika.URLParameters(settings.rabbitmq_url)
+                connection = pika.BlockingConnection(params)
+                channel = connection.channel()
+                channel.exchange_declare(exchange="logiflow.events",
+                                         exchange_type="topic",
+                                         durable=True)
+                channel.basic_publish(
+                    exchange="logiflow.events",
+                    routing_key="pedido.estado.actualizado",
+                    body=json.dumps(payload).encode(),
+                    properties=pika.BasicProperties(delivery_mode=2),
+                )
+                connection.close()
+            except Exception:
+                # Fallback a publicar vía REST al realtime-service
+                try:
+                    url = f"{settings.ws_service_url}/api/ws/publish"
+                    with httpx.Client(timeout=2.0) as client:
+                        client.post(url, json=payload)
+                except Exception:
+                    pass
 
         return db_pedido
 

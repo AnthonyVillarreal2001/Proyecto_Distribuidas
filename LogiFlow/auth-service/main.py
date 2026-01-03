@@ -6,14 +6,15 @@ import sys
 
 sys.path.append('..')
 
-from shared.database import get_db, Base, engine
+from shared.database import get_db, Base, engine, wait_for_database
 from shared.config import get_settings
 import models
 import schemas
 import auth
 import repository
 
-# Create tables
+# Wait for DB and create tables
+wait_for_database()
 Base.metadata.create_all(bind=engine)
 
 settings = get_settings()
@@ -222,11 +223,6 @@ def verify_access_token(token: str):
     
     - **token**: Access token a verificar
     """
-    if not token or token.strip() == "":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token parameter is required and cannot be empty")
-
     token_data = auth.verify_token(token, token_type="access")
 
     if not token_data:

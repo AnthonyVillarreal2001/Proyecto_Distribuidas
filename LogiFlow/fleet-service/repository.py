@@ -5,9 +5,15 @@ import models
 import schemas
 import vehiculo_hierarchy
 import sys
+import httpx
+import pika
+import json
 
 sys.path.append('..')
 from shared.enums import EstadoRepartidor, TipoVehiculo
+from shared.config import get_settings
+
+settings = get_settings()
 
 
 class FleetRepository:
@@ -104,6 +110,45 @@ class FleetRepository:
         if "ubicacion_lat" in update_dict or "ubicacion_lon" in update_dict:
             db_repartidor.ultima_actualizacion_gps = datetime.utcnow()
 
+            # Publish location update to RabbitMQ (best-effort)
+            payload = {
+                "type": "location_update",
+                "data": {
+                    "repartidor_id":
+                    repartidor_id,
+                    "ubicacion_lat":
+                    update_dict.get("ubicacion_lat",
+                                    db_repartidor.ubicacion_lat),
+                    "ubicacion_lon":
+                    update_dict.get("ubicacion_lon",
+                                    db_repartidor.ubicacion_lon),
+                    "timestamp":
+                    datetime.utcnow().isoformat(),
+                }
+            }
+            try:
+                params = pika.URLParameters(settings.rabbitmq_url)
+                connection = pika.BlockingConnection(params)
+                channel = connection.channel()
+                channel.exchange_declare(exchange="logiflow.events",
+                                         exchange_type="topic",
+                                         durable=True)
+                channel.basic_publish(
+                    exchange="logiflow.events",
+                    routing_key="realtime.location",
+                    body=json.dumps(payload).encode(),
+                    properties=pika.BasicProperties(delivery_mode=2),
+                )
+                connection.close()
+            except Exception:
+                # Fallback to HTTP publish if RabbitMQ unavailable
+                try:
+                    url = f"{settings.ws_service_url}/api/ws/publish"
+                    with httpx.Client(timeout=2.0) as client:
+                        client.post(url, json=payload)
+                except Exception:
+                    pass
+
         db_repartidor.updated_at = datetime.utcnow()
 
         self.db.commit()
@@ -113,19 +158,18 @@ class FleetRepository:
 
     def delete_repartidor_fisico(self, repartidor_id: int) -> bool:
         """
-        Elimina un repartidor físicamente de la base de datos
-        
-        Returns:
-            True si se eliminó correctamente, False si no se encontró
+        Inactiva un repartidor (soft delete) para evitar errores de llave foránea.
+        Ajusta `is_active=False` y `estado=INACTIVO`.
         """
         db_repartidor = self.get_repartidor_by_id(repartidor_id)
 
         if not db_repartidor:
             return False
 
-        self.db.delete(db_repartidor)
+        db_repartidor.is_active = False
+        db_repartidor.estado = EstadoRepartidor.INACTIVO.value
+        db_repartidor.updated_at = datetime.utcnow()
         self.db.commit()
-
         return True
 
     # ========== VEHÍCULOS ==========
@@ -229,3 +273,17 @@ class FleetRepository:
         self.db.refresh(db_vehiculo)
 
         return db_vehiculo
+
+    def delete_vehiculo_fisico(self, vehiculo_id: int) -> bool:
+        """
+        Inactiva un vehículo (soft delete) usando `estado=INACTIVO`.
+        """
+        db_vehiculo = self.get_vehiculo_by_id(vehiculo_id)
+
+        if not db_vehiculo:
+            return False
+
+        db_vehiculo.estado = "INACTIVO"
+        db_vehiculo.updated_at = datetime.utcnow()
+        self.db.commit()
+        return True

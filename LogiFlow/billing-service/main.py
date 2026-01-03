@@ -7,7 +7,7 @@ import sys
 
 sys.path.append('..')
 
-from shared.database import get_db, Base, engine
+from shared.database import get_db, Base, engine, wait_for_database
 from shared.config import get_settings
 from shared.enums import EstadoFactura
 from shared.schemas import TokenData
@@ -17,7 +17,8 @@ import repository
 import calculator
 import auth_dependency
 
-# Create tables
+# Wait for DB and create tables
+wait_for_database()
 Base.metadata.create_all(bind=engine)
 
 settings = get_settings()

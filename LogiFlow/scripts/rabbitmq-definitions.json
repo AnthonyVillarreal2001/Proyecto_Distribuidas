@@ -1,0 +1,61 @@
+{
+  "rabbit_version": "3.12",
+  "policies": [
+    {
+      "vhost": "/",
+      "name": "ttl_policy",
+      "pattern": ".*",
+      "apply-to": "queues",
+      "definition": {
+        "message-ttl": 86400000,
+        "ha-mode": "all"
+      },
+      "priority": 0
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "logiflow.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "realtime.broadcast",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "notification.pedido",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "logiflow.events",
+      "vhost": "/",
+      "destination": "realtime.broadcast",
+      "destination_type": "queue",
+      "routing_key": "realtime.*",
+      "arguments": {}
+    },
+    {
+      "source": "logiflow.events",
+      "vhost": "/",
+      "destination": "notification.pedido",
+      "destination_type": "queue",
+      "routing_key": "pedido.estado.*",
+      "arguments": {}
+    }
+  ]
+}
