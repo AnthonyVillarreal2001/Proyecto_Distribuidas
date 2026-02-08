@@ -27,6 +27,14 @@
       "value": "http://localhost:5004"
     },
     {
+      "key": "baseUrlNotification",
+      "value": "http://localhost:5007"
+    },
+    {
+      "key": "baseUrlRealtime",
+      "value": "http://localhost:5006"
+    },
+    {
       "key": "accessToken",
       "value": ""
     },
@@ -993,6 +1001,67 @@
       ]
     },
     {
+      "name": "Notifications (Direct)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (pm.environment.get('accessToken')) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') }); }"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Listar Notificaciones",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrlNotification}}/api/notifications?limit=20",
+              "host": [
+                "{{baseUrlNotification}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar Notificaciones por Categoria (pedido)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrlNotification}}/api/notifications/categories/pedido?limit=20",
+              "host": [
+                "{{baseUrlNotification}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "categories",
+                "pedido"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Gateway: Auth",
       "item": [
         {
@@ -1320,7 +1389,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"query\": \"query($limit:Int!){ pedidos(limit:$limit){ id codigo estado } }\",\n  \"variables\": { \"limit\": 5 }\n}"
+              "raw": "{\n  \"query\": \"query($limit:Int!){ pedidos(limit:$limit){ id codigo estado origen_direccion destino_direccion tipo_entrega peso_kg } }\",\n  \"variables\": { \"limit\": 5 }\n}"
             }
           }
         },
@@ -1349,7 +1418,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"query\": \"mutation($payload:PedidoInput!){ crear_pedido(clienteId:$payload.cliente_id, origenDireccion:$payload.origen_direccion, destinoDireccion:$payload.destino_direccion, tipoEntrega:$payload.tipo_entrega, descripcion:$payload.descripcion, pesoKg:$payload.peso_kg, contactoNombre:$payload.contacto_nombre, contactoTelefono:$payload.contacto_telefono){ id codigo } }\",\n  \"variables\": { \n    \"payload\": {\n      \"cliente_id\": 1,\n      \"origen_direccion\": \"Centro\",\n      \"destino_direccion\": \"Norte\",\n      \"tipo_entrega\": \"URBANA_RAPIDA\",\n      \"descripcion\": \"Caja\",\n      \"peso_kg\": 2.5,\n      \"contacto_nombre\": \"Juan\",\n      \"contacto_telefono\": \"0999\"\n    }\n  }\n}"
+              "raw": "{\n  \"query\": \"mutation($payload:PedidoInput!){ crear_pedido(payload:$payload){ id codigo estado } }\",\n  \"variables\": { \n    \"payload\": {\n      \"cliente_id\": 1,\n      \"origen_direccion\": \"Centro\",\n      \"destino_direccion\": \"Norte\",\n      \"tipo_entrega\": \"URBANA_RAPIDA\",\n      \"descripcion\": \"Caja\",\n      \"peso_kg\": 2.5,\n      \"contacto_nombre\": \"Juan\",\n      \"contacto_telefono\": \"0999\"\n    }\n  }\n}"
             }
           }
         }

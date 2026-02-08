@@ -1,5 +1,20 @@
 {
   "rabbit_version": "3.12",
+  "vhosts": [
+    { "name": "/" }
+  ],
+  "users": [
+    { "name": "guest", "password": "guest", "tags": "administrator" }
+  ],
+  "permissions": [
+    {
+      "user": "guest",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
   "policies": [
     {
       "vhost": "/",
@@ -52,9 +67,33 @@
     {
       "source": "logiflow.events",
       "vhost": "/",
+      "destination": "realtime.broadcast",
+      "destination_type": "queue",
+      "routing_key": "pedido.estado.*",
+      "arguments": {}
+    },
+    {
+      "source": "logiflow.events",
+      "vhost": "/",
+      "destination": "realtime.broadcast",
+      "destination_type": "queue",
+      "routing_key": "pedido.creado",
+      "arguments": {}
+    },
+    {
+      "source": "logiflow.events",
+      "vhost": "/",
       "destination": "notification.pedido",
       "destination_type": "queue",
       "routing_key": "pedido.estado.*",
+      "arguments": {}
+    },
+    {
+      "source": "logiflow.events",
+      "vhost": "/",
+      "destination": "notification.pedido",
+      "destination_type": "queue",
+      "routing_key": "pedido.creado",
       "arguments": {}
     }
   ]

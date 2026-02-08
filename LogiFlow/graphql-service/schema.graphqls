@@ -8,10 +8,29 @@ type Pedido {
   cliente_id: Int!
   repartidor_id: Int
   origen_direccion: String!
+  origen_lat: Float
+  origen_lon: Float
   destino_direccion: String!
+  destino_lat: Float
+  destino_lon: Float
+  zona_id: ID
   tipo_entrega: String!
   estado: String!
+  descripcion: String!
   peso_kg: Float!
+  dimensiones: String
+  valor_declarado: Float
+  contacto_nombre: String!
+  contacto_telefono: String!
+  notas: String
+  notas_entrega: String
+  created_at: String
+  asignado_at: String
+  en_ruta_at: String
+  entregado_at: String
+  cancelado_at: String
+  updated_at: String
+  motivo_cancelacion: String
 }
 
 type Factura {
@@ -49,6 +68,25 @@ input PedidoFiltro {
   repartidor_id: Int
 }
 
+input PedidoInput {
+  cliente_id: Int!
+  origen_direccion: String!
+  destino_direccion: String!
+  tipo_entrega: String!
+  descripcion: String!
+  peso_kg: Float!
+  contacto_nombre: String!
+  contacto_telefono: String!
+  origen_lat: Float
+  origen_lon: Float
+  destino_lat: Float
+  destino_lon: Float
+  zona_id: ID
+  dimensiones: String
+  valor_declarado: Float
+  notas: String
+}
+
 type Query {
   pedido_by_id(id: ID!): Pedido
   pedidos(limit: Int = 10): [Pedido!]!
@@ -63,16 +101,7 @@ type CacheStats {
 }
 
 type Mutation {
-  crear_pedido(
-    cliente_id: Int!,
-    origen_direccion: String!,
-    destino_direccion: String!,
-    tipo_entrega: String!,
-    descripcion: String!,
-    peso_kg: Float!,
-    contacto_nombre: String!,
-    contacto_telefono: String!
-  ): Pedido!
+  crear_pedido(payload: PedidoInput!): Pedido!
   crear_factura(
     pedido_id: Int!,
     cliente_id: Int!,

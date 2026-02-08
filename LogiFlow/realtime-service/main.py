@@ -1,3 +1,4 @@
+from shared.config import get_settings
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Set, DefaultDict
@@ -6,10 +7,10 @@ import httpx
 import sys
 import json
 import threading
+import time
 import pika
 
 sys.path.append('..')
-from shared.config import get_settings
 
 settings = get_settings()
 
@@ -128,7 +129,16 @@ async def publish_event(event: Dict):
 
 def _rabbit_consumer():
     params = pika.URLParameters(settings.rabbitmq_url)
-    connection = pika.BlockingConnection(params)
+
+    # Retry loop to avoid crashing if RabbitMQ is not ready yet
+    while True:
+        try:
+            connection = pika.BlockingConnection(params)
+            break
+        except Exception:
+            print("[RealtimeService] RabbitMQ no disponible, reintentando en 2s...")
+            time.sleep(2)
+
     channel = connection.channel()
     channel.exchange_declare(exchange="logiflow.events",
                              exchange_type="topic",
@@ -138,6 +148,12 @@ def _rabbit_consumer():
     channel.queue_bind(exchange="logiflow.events",
                        queue=queue_name,
                        routing_key="realtime.*")
+    channel.queue_bind(exchange="logiflow.events",
+                       queue=queue_name,
+                       routing_key="pedido.estado.*")
+    channel.queue_bind(exchange="logiflow.events",
+                       queue=queue_name,
+                       routing_key="pedido.creado")
 
     def callback(ch, method, properties, body):
         try:

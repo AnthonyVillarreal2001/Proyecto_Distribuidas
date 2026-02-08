@@ -1,12 +1,13 @@
+from shared.config import get_settings
 import strawberry
-from typing import Optional, List
+from strawberry.schema.config import StrawberryConfig
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, Header, HTTPException, Request
 from strawberry.fastapi import GraphQLRouter
 import httpx
 import sys
 
 sys.path.append('..')
-from shared.config import get_settings
 
 settings = get_settings()
 
@@ -19,10 +20,29 @@ class Pedido:
     cliente_id: int
     repartidor_id: Optional[int]
     origen_direccion: str
+    origen_lat: Optional[float]
+    origen_lon: Optional[float]
     destino_direccion: str
+    destino_lat: Optional[float]
+    destino_lon: Optional[float]
+    zona_id: Optional[str]
     tipo_entrega: str
     estado: str
+    descripcion: str
     peso_kg: float
+    dimensiones: Optional[str]
+    valor_declarado: Optional[float]
+    contacto_nombre: str
+    contacto_telefono: str
+    notas: Optional[str]
+    notas_entrega: Optional[str]
+    created_at: Optional[str]
+    asignado_at: Optional[str]
+    en_ruta_at: Optional[str]
+    entregado_at: Optional[str]
+    cancelado_at: Optional[str]
+    updated_at: Optional[str]
+    motivo_cancelacion: Optional[str]
 
 
 @strawberry.type
@@ -69,6 +89,64 @@ cache_hits = 0
 cache_misses = 0
 
 
+@strawberry.input
+class PedidoInput:
+    cliente_id: int
+    origen_direccion: str
+    destino_direccion: str
+    tipo_entrega: str
+    descripcion: str
+    peso_kg: float
+    contacto_nombre: str
+    contacto_telefono: str
+    origen_lat: Optional[float] = None
+    origen_lon: Optional[float] = None
+    destino_lat: Optional[float] = None
+    destino_lon: Optional[float] = None
+    zona_id: Optional[str] = None
+    dimensiones: Optional[str] = None
+    valor_declarado: Optional[float] = None
+    notas: Optional[str] = None
+
+
+PEDIDO_FIELDS: set[str] = {
+    "id",
+    "codigo",
+    "cliente_id",
+    "repartidor_id",
+    "origen_direccion",
+    "origen_lat",
+    "origen_lon",
+    "destino_direccion",
+    "destino_lat",
+    "destino_lon",
+    "zona_id",
+    "tipo_entrega",
+    "estado",
+    "descripcion",
+    "peso_kg",
+    "dimensiones",
+    "valor_declarado",
+    "contacto_nombre",
+    "contacto_telefono",
+    "notas",
+    "notas_entrega",
+    "created_at",
+    "asignado_at",
+    "en_ruta_at",
+    "entregado_at",
+    "cancelado_at",
+    "updated_at",
+    "motivo_cancelacion",
+}
+
+
+def to_pedido(data: Dict[str, Any]) -> Pedido:
+    """Map REST payload to Pedido ignoring unexpected keys."""
+    filtered = {k: data.get(k) for k in PEDIDO_FIELDS}
+    return Pedido(**filtered)  # type: ignore[arg-type]
+
+
 async def rest_get(url: str, token: Optional[str] = None):
     headers = {}
     if token:
@@ -102,7 +180,7 @@ async def rest_post(url: str, data: dict, token: Optional[str] = None):
 
 # Auth dependency to pass JWT from headers to resolvers
 async def get_token(authorization: Optional[str] = Header(
-    None)) -> Optional[str]:
+        None)) -> Optional[str]:
     if authorization and authorization.startswith("Bearer "):
         return authorization.split(" ", 1)[1]
     return None
@@ -117,7 +195,7 @@ class Query:
             info.context["request"].headers.get("authorization"))
         data = await rest_get(
             f"{settings.pedido_service_url}/api/pedidos/{id}", token)
-        return Pedido(**data)
+        return to_pedido(data)
 
     @strawberry.field
     async def pedidos(self, limit: int = 10, info=None) -> List[Pedido]:
@@ -125,7 +203,7 @@ class Query:
             info.context["request"].headers.get("authorization"))
         data = await rest_get(
             f"{settings.pedido_service_url}/api/pedidos?limit={limit}", token)
-        return [Pedido(**p) for p in data["pedidos"]]
+        return [to_pedido(p) for p in data.get("pedidos", [])]
 
     @strawberry.field
     async def factura_by_id(self, id: int, info=None) -> Optional[Factura]:
@@ -209,31 +287,13 @@ class Query:
 class Mutation:
 
     @strawberry.mutation
-    async def crear_pedido(self,
-                           cliente_id: int,
-                           origen_direccion: str,
-                           destino_direccion: str,
-                           tipo_entrega: str,
-                           descripcion: str,
-                           peso_kg: float,
-                           contacto_nombre: str,
-                           contacto_telefono: str,
-                           info=None) -> Pedido:
+    async def crear_pedido(self, payload: PedidoInput, info=None) -> Pedido:
         token = await get_token(
             info.context["request"].headers.get("authorization"))
-        body = {
-            "cliente_id": cliente_id,
-            "origen_direccion": origen_direccion,
-            "destino_direccion": destino_direccion,
-            "tipo_entrega": tipo_entrega,
-            "descripcion": descripcion,
-            "peso_kg": peso_kg,
-            "contacto_nombre": contacto_nombre,
-            "contacto_telefono": contacto_telefono
-        }
+        body = {k: v for k, v in payload.__dict__.items() if v is not None}
         data = await rest_post(f"{settings.pedido_service_url}/api/pedidos",
                                body, token)
-        return Pedido(**data)
+        return to_pedido(data)
 
     @strawberry.mutation
     async def crear_factura(self,
@@ -258,7 +318,9 @@ class Mutation:
         return Factura(**data)
 
 
-schema = strawberry.Schema(query=Query, mutation=Mutation)
+schema = strawberry.Schema(query=Query,
+                           mutation=Mutation,
+                           config=StrawberryConfig(auto_camel_case=False))
 
 app = FastAPI(title="LogiFlow - GraphQL Service")
 
@@ -268,7 +330,8 @@ async def get_context(request: Request):
     return {"request": request}
 
 
-graphql_app = GraphQLRouter(schema, context_getter=get_context)
+# Habilita GraphiQL para probar queries/mutations desde la UI gráfica
+graphql_app = GraphQLRouter(schema, context_getter=get_context, graphiql=True)
 app.include_router(graphql_app, prefix="/graphql")
 
 

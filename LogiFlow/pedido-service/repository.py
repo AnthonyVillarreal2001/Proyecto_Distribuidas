@@ -1,3 +1,5 @@
+from shared.config import get_settings
+from shared.enums import EstadoPedido, TipoEntrega
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
@@ -10,8 +12,6 @@ import pika
 import httpx
 
 sys.path.append('..')
-from shared.enums import EstadoPedido, TipoEntrega
-from shared.config import get_settings
 
 settings = get_settings()
 
@@ -40,7 +40,7 @@ class PedidoRepository:
                       pedido_data: schemas.PedidoCreate) -> models.Pedido:
         """
         Crea un nuevo pedido - Transacción ACID
-        
+
         Valida el tipo de entrega y peso usando Factory Pattern
         """
         # Validar pedido usando Factory
@@ -78,6 +78,41 @@ class PedidoRepository:
         self.db.commit()
         self.db.refresh(db_pedido)
 
+        # Publicar evento de pedido creado
+        payload = {
+            "type": "pedido.creado",
+            "data": {
+                "pedido_id": db_pedido.id,
+                "codigo": db_pedido.codigo,
+                "cliente_id": db_pedido.cliente_id,
+                "zona_id": db_pedido.zona_id,
+                "estado": db_pedido.estado,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        }
+        try:
+            params = pika.URLParameters(settings.rabbitmq_url)
+            connection = pika.BlockingConnection(params)
+            channel = connection.channel()
+            channel.exchange_declare(exchange="logiflow.events",
+                                     exchange_type="topic",
+                                     durable=True)
+            channel.basic_publish(
+                exchange="logiflow.events",
+                routing_key="pedido.creado",
+                body=json.dumps(payload).encode(),
+                properties=pika.BasicProperties(delivery_mode=2),
+            )
+            connection.close()
+        except Exception:
+            # Fallback a publicar vía HTTP al realtime-service
+            try:
+                url = f"{settings.ws_service_url}/api/ws/publish"
+                with httpx.Client(timeout=2.0) as client:
+                    client.post(url, json=payload)
+            except Exception:
+                pass
+
         return db_pedido
 
     def get_pedido_by_id(self, pedido_id: int) -> Optional[models.Pedido]:
@@ -100,7 +135,7 @@ class PedidoRepository:
     ) -> tuple[List[models.Pedido], int]:
         """
         Obtiene lista de pedidos con filtros opcionales
-        
+
         Returns:
             (lista_pedidos, total_count)
         """
@@ -126,7 +161,7 @@ class PedidoRepository:
             update_data: schemas.PedidoUpdate) -> Optional[models.Pedido]:
         """
         Actualiza pedido (PATCH) - Transacción ACID
-        
+
         Actualiza solo los campos proporcionados
         """
         db_pedido = self.get_pedido_by_id(pedido_id)
@@ -227,7 +262,7 @@ class PedidoRepository:
     def delete_pedido_fisico(self, pedido_id: int) -> bool:
         """
         Elimina un pedido físicamente de la base de datos
-        
+
         Returns:
             True si se eliminó correctamente, False si no se encontró
         """
