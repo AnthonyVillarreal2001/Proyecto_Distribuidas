@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: realtime-service
+  namespace: logiflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: realtime-service
+  template:
+    metadata:
+      labels:
+        app: realtime-service
+    spec:
+      containers:
+        - name: realtime-service
+          image: alexis425/logiflow-realtime:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: database_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: database_url
+            - name: rabbitmq_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: rabbitmq_url
+            - name: auth_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: auth_service_url
+            - name: secret_key
+              valueFrom:
+                secretKeyRef:
+                  name: logiflow-secrets
+                  key: secret_key
+            - name: cors_origins
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: cors_origins
+          ports:
+            - containerPort: 5005
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5005
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5005
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: realtime-service
+  namespace: logiflow
+spec:
+  selector:
+    app: realtime-service
+  ports:
+    - port: 5005
+      targetPort: 5005

@@ -1,3 +1,8 @@
+from logging_middleware import log_request_middleware
+from rate_limiter import rate_limit_middleware, rate_limiter
+from auth_middleware import get_current_user, verify_jwt_token
+from shared.schemas import TokenData
+from shared.config import get_settings
 from fastapi import FastAPI, Depends, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,11 +13,6 @@ import sys
 
 sys.path.append('..')
 
-from shared.config import get_settings
-from shared.schemas import TokenData
-from .auth_middleware import get_current_user, verify_jwt_token
-from .rate_limiter import rate_limit_middleware, rate_limiter
-from .logging_middleware import log_request_middleware
 
 settings = get_settings()
 security = HTTPBearer()
@@ -57,7 +57,7 @@ def root():
 async def health_check():
     """
     Health check de todos los servicios
-    
+
     Verifica conectividad con cada microservicio
     """
     services_health = {}
@@ -142,7 +142,7 @@ async def proxy_request(request: Request,
                         require_auth: bool = False) -> JSONResponse:
     """
     Proxy genérico para reenviar requests a microservicios
-    
+
     Args:
         request: FastAPI Request object
         target_url: URL del servicio destino

@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphql-service
+  namespace: logiflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: graphql-service
+  template:
+    metadata:
+      labels:
+        app: graphql-service
+    spec:
+      containers:
+        - name: graphql-service
+          image: alexis425/logiflow-graphql:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: auth_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: auth_service_url
+            - name: pedido_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: pedido_service_url
+            - name: fleet_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: fleet_service_url
+            - name: billing_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: billing_service_url
+            - name: cors_origins
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: cors_origins
+          ports:
+            - containerPort: 5006
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5006
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5006
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphql-service
+  namespace: logiflow
+spec:
+  selector:
+    app: graphql-service
+  ports:
+    - port: 5006
+      targetPort: 5006

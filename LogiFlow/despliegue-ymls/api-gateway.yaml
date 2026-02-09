@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: logiflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: alexis425/logiflow-gateway:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: auth_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: auth_service_url
+            - name: pedido_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: pedido_service_url
+            - name: fleet_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: fleet_service_url
+            - name: billing_service_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: billing_service_url
+            - name: rate_limit_per_minute
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: rate_limit_per_minute
+            - name: cors_origins
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: cors_origins
+            - name: secret_key
+              valueFrom:
+                secretKeyRef:
+                  name: logiflow-secrets
+                  key: secret_key
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: logiflow
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 80
+      targetPort: 5000
+      name: http

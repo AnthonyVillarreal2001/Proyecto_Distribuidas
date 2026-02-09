@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logiflow-config
+  namespace: logiflow
+data:
+  database_url: postgresql+psycopg2://postgres:postgres@postgres:5432/logiflow_db
+  rabbitmq_url: amqp://guest:guest@rabbitmq:5672/
+  auth_service_url: http://auth-service:5001
+  pedido_service_url: http://pedido-service:5002
+  fleet_service_url: http://fleet-service:5003
+  billing_service_url: http://billing-service:5004
+  ws_service_url: http://realtime-service:5005
+  cors_origins: '["http://localhost:3000","http://localhost:8000"]'
+  rate_limit_per_minute: "100"

@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: logiflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: alexis425/logiflow-notification:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: database_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: database_url
+            - name: rabbitmq_url
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: rabbitmq_url
+            - name: secret_key
+              valueFrom:
+                secretKeyRef:
+                  name: logiflow-secrets
+                  key: secret_key
+            - name: cors_origins
+              valueFrom:
+                configMapKeyRef:
+                  name: logiflow-config
+                  key: cors_origins
+          ports:
+            - containerPort: 5007
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5007
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5007
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: logiflow
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - port: 5007
+      targetPort: 5007
